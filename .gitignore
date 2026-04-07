@@ -1,0 +1,17 @@
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+build/
+dist/
+vendor/7zip/
+src/autounzip.egg-info/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.spec
+settings.json
+*.log
+Thumbs.db
+.DS_Store
