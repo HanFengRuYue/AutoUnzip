@@ -40,13 +40,13 @@ class SevenZipTool:
         self.creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
     def probe(self, archive_path: Path) -> ArchiveProbe:
-        command = [str(self.binary_path), "l", "-slt", str(archive_path)]
+        command = [str(self.binary_path), "l", "-slt", "-sccUTF-8", str(archive_path)]
         completed = subprocess.run(
             command,
             capture_output=True,
             text=True,
             encoding="utf-8",
-            errors="ignore",
+            errors="replace",
             creationflags=self.creationflags,
         )
         output = "\n".join(filter(None, [completed.stdout, completed.stderr]))
@@ -75,6 +75,7 @@ class SevenZipTool:
             "x",
             "-y",
             "-aoa",
+            "-sccUTF-8",
             "-bso1",
             "-bse1",
             "-bsp1",
@@ -89,7 +90,7 @@ class SevenZipTool:
             stderr=subprocess.STDOUT,
             text=True,
             encoding="utf-8",
-            errors="ignore",
+            errors="replace",
             creationflags=self.creationflags,
         )
         lines: list[str] = []
@@ -159,7 +160,7 @@ class RecursiveExtractor:
         temp_root = Path(tempfile.mkdtemp(prefix="autounzip-"))
         self.settings_store.add_recent_input(str(job.input_path))
         result = ExtractionResult(final_output_dir=output_root)
-        queue: list[tuple[ArchiveGroup, Path, int, Path | None]] = []
+        queue: list[tuple[ArchiveGroup, Path, int, bool]] = []
         processed: set[str] = set()
         root = job.input_path
 
@@ -170,12 +171,12 @@ class RecursiveExtractor:
                 raise RuntimeError("未找到可解压的压缩包、分卷或已配置的伪装后缀文件。")
 
             for group in initial.groups:
-                queue.append((group, self._root_target(group, job, output_root), 0, root if root.is_dir() else None))
+                queue.append((group, self._root_target(group, job, output_root), 0, False))
 
             while queue:
                 if is_cancelled():
                     raise RuntimeError("任务已取消。")
-                group, target_dir, layer, root_dir = queue.pop(0)
+                group, target_dir, layer, remove_source_after_success = queue.pop(0)
                 fingerprint = self._fingerprint(group)
                 if fingerprint in processed:
                     continue
@@ -209,6 +210,8 @@ class RecursiveExtractor:
                 result.layers_processed = max(result.layers_processed, layer + 1)
                 if password_source:
                     result.password_sources.append(password_source)
+                if remove_source_after_success:
+                    self._cleanup_intermediate_archive(group, log)
 
                 nested = discover_archives(target_dir, self.settings, self.tool.probe)
                 self._log_discovery(nested, log)
@@ -221,7 +224,7 @@ class RecursiveExtractor:
                             nested_group,
                             self._nested_target(nested_group.entry_path),
                             layer + 1,
-                            root_dir,
+                            True,
                         )
                     )
         finally:
@@ -325,7 +328,9 @@ class RecursiveExtractor:
         return self._unique_directory(base_dir / f"{archive_display_stem(group)}_unzipped")
 
     def _nested_target(self, archive_path: Path) -> Path:
-        return self._unique_directory(archive_path.parent / f"{archive_path.stem}_unzipped")
+        # Nested archives are expanded back into their current directory so
+        # wrapper archives do not leave *_unzipped nesting behind.
+        return archive_path.parent
 
     def _unique_directory(self, path: Path) -> Path:
         if not path.exists():
@@ -363,6 +368,25 @@ class RecursiveExtractor:
     def _fingerprint(self, group: ArchiveGroup) -> str:
         stat = group.entry_path.stat()
         return f"{group.entry_path.resolve()}::{stat.st_size}::{stat.st_mtime_ns}"
+
+    def _cleanup_intermediate_archive(
+        self, group: ArchiveGroup, log: Callable[[str], None]
+    ) -> None:
+        removed = 0
+        for member_path in group.member_paths:
+            if not member_path.exists():
+                continue
+            try:
+                member_path.unlink()
+                removed += 1
+            except OSError as exc:
+                log(f"[清理] 无法删除中间文件 {member_path}: {exc}")
+        if removed == 1:
+            log(f"[清理] 已删除中间压缩包 {group.entry_path.name}")
+        elif removed > 1:
+            log(
+                f"[清理] 已删除中间压缩包及分卷 {group.entry_path.name} ({removed} 个文件)"
+            )
 
     def _source_label(self, group: ArchiveGroup) -> str:
         if group.detection_source == "disguised_extension":

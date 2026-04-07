@@ -83,7 +83,7 @@ class MainWindow(QMainWindow):
         actions.setSpacing(10)
         self.file_button = QPushButton("选择文件")
         self.folder_button = QPushButton("选择文件夹")
-        self.open_output_button = QPushButton("打开输出目录")
+        self.open_output_button = QPushButton("打开结果目录")
         self.open_output_button.setEnabled(False)
         self.stop_button = QPushButton("停止")
         self.stop_button.setEnabled(False)
@@ -108,6 +108,7 @@ class MainWindow(QMainWindow):
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 1)
         self.progress_bar.setValue(0)
+        self.progress_bar.setTextVisible(False)
 
         log_actions = QHBoxLayout()
         log_actions.addStretch(1)
@@ -238,7 +239,8 @@ class MainWindow(QMainWindow):
         self._last_output_dir = str(result.final_output_dir)
         message = (
             f"已完成，共解压 {result.archives_extracted} 个压缩包。\n"
-            f"输出目录：{result.final_output_dir}"
+            f"结果目录：{result.final_output_dir}\n"
+            "中间层压缩包和临时目录已自动清理。"
         )
         if result.warnings:
             message += f"\n\n警告数量：{len(result.warnings)}"
