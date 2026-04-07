@@ -20,11 +20,14 @@ try {
     }
 
     $previousTag = $null
-    git rev-parse --verify "$Tag^" *> $null
-    if ($LASTEXITCODE -eq 0) {
-        $candidate = git describe --tags --abbrev=0 "$Tag^" 2>$null
-        if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($candidate)) {
-            $previousTag = $candidate.Trim()
+    $reachableTags = @(
+        git tag --merged $Tag --sort=-creatordate
+    ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    foreach ($candidate in $reachableTags) {
+        $trimmed = $candidate.Trim()
+        if ($trimmed -ne $Tag) {
+            $previousTag = $trimmed
+            break
         }
     }
 
