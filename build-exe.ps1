@@ -14,18 +14,27 @@ function Resolve-BootstrapPython {
         if ($candidate -eq "py.exe") {
             $command = Get-Command $candidate -ErrorAction SilentlyContinue
             if ($command) {
-                return @($command.Source, "-3")
+                return @{
+                    Path = $command.Source
+                    Args = @("-3")
+                }
             }
             continue
         }
 
         if (Test-Path $candidate) {
-            return @($candidate)
+            return @{
+                Path = $candidate
+                Args = @()
+            }
         }
 
         $command = Get-Command $candidate -ErrorAction SilentlyContinue
         if ($command) {
-            return @($command.Source)
+            return @{
+                Path = $command.Source
+                Args = @()
+            }
         }
     }
 
@@ -37,12 +46,7 @@ try {
     if (-not (Test-Path $venvPython)) {
         Write-Host "No .venv detected. Creating virtual environment..."
         $bootstrap = Resolve-BootstrapPython
-        if ($bootstrap.Length -eq 1) {
-            & $bootstrap[0] -m venv .venv
-        }
-        else {
-            & $bootstrap[0] $bootstrap[1] -m venv .venv
-        }
+        & $bootstrap.Path @($bootstrap.Args) -m venv .venv
     }
 
     Write-Host "Building AutoUnzip one-file EXE..."
