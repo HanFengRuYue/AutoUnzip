@@ -42,6 +42,7 @@ Start here when changing behavior:
 
 - Use `powershell -ExecutionPolicy Bypass -File .\build-exe.ps1` for the normal build flow.
 - `build-exe.ps1` bootstraps `.venv` if needed, then delegates to `scripts/build.ps1`.
+- `build-exe.ps1` keeps the bootstrap interpreter as a `Path` plus `Args` pair so virtual-environment creation also works on CI runners whose Python path contains spaces.
 - `scripts/build.ps1` must continue to:
   - install the editable package with `.[build]`
   - regenerate icons with `scripts/generate_icon.py`
@@ -52,6 +53,7 @@ Start here when changing behavior:
 - `vendor/7zip` is intentionally not committed. Any build instructions or release automation must keep regenerating it locally.
 - Pushing a Git tag that matches `v[0-9]*` triggers `.github/workflows/release.yml` on GitHub Actions.
 - The workflow creates a GitHub Release whose title is the tag name and whose description is generated from commit subjects between the previous reachable tag and the current tag.
+- `scripts/generate_release_notes.ps1` finds the previous version from tags reachable from the current tag; if none exists, it treats the release as the first version and lists all commits reachable from that tag.
 
 ## Runtime Layout
 
@@ -98,6 +100,9 @@ Start here when changing behavior:
   - `build-exe.ps1`
   - `scripts/build.ps1`
   - this file
+- If you change release tag matching, GitHub release creation, or release-note generation in `.github/workflows/release.yml` or `scripts/generate_release_notes.ps1`, also update:
+  - this file
+  - `README.md` if the user-facing release flow changes
 - If you change vendored resource lookup in `src/autounzip/vendor.py`, also update PyInstaller `--add-data` arguments in `scripts/build.ps1`.
 
 ## Git Hygiene
@@ -114,6 +119,8 @@ Start here when changing behavior:
   - default empty password library
   - default disguised suffixes `.jpg`, `.jpeg`, `.psd`
   - one-file EXE build output path
+  - `v[0-9]*` tag-triggered GitHub release workflow and EXE upload
+  - first-release fallback in `scripts/generate_release_notes.ps1`
 - Not documented here:
   - speculative refactors
   - temporary debugging notes
